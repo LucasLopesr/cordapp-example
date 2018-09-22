@@ -24,7 +24,10 @@ class IOUFlowTests {
         a = network.createPartyNode()
         b = network.createPartyNode()
         // For real nodes this happens automatically, but we have to manually register the flow for tests.
-        listOf(a, b).forEach { it.registerInitiatedFlow(ExampleFlow.Acceptor::class.java) }
+        listOf(a, b).forEach {
+            it.registerInitiatedFlow(CreateIOUFlow.Acceptor::class.java)
+            it.registerInitiatedFlow(PayIOUFlow.Acceptor::class.java)
+        }
         network.runNetwork()
     }
 
@@ -35,7 +38,7 @@ class IOUFlowTests {
 
     @Test
     fun `flow rejects invalid IOUs`() {
-        val flow = ExampleFlow.Initiator(-1, b.info.singleIdentity())
+        val flow = CreateIOUFlow.Initiator(-1, b.info.singleIdentity())
         val future = a.startFlow(flow)
         network.runNetwork()
 
@@ -45,7 +48,7 @@ class IOUFlowTests {
 
     @Test
     fun `SignedTransaction returned by the flow is signed by the initiator`() {
-        val flow = ExampleFlow.Initiator(1, b.info.singleIdentity())
+        val flow = CreateIOUFlow.Initiator(1, b.info.singleIdentity())
         val future = a.startFlow(flow)
         network.runNetwork()
 
@@ -55,7 +58,7 @@ class IOUFlowTests {
 
     @Test
     fun `SignedTransaction returned by the flow is signed by the acceptor`() {
-        val flow = ExampleFlow.Initiator(1, b.info.singleIdentity())
+        val flow = CreateIOUFlow.Initiator(1, b.info.singleIdentity())
         val future = a.startFlow(flow)
         network.runNetwork()
 
@@ -65,7 +68,7 @@ class IOUFlowTests {
 
     @Test
     fun `flow records a transaction in both parties' transaction storages`() {
-        val flow = ExampleFlow.Initiator(1, b.info.singleIdentity())
+        val flow = CreateIOUFlow.Initiator(1, b.info.singleIdentity())
         val future = a.startFlow(flow)
         network.runNetwork()
         val signedTx = future.getOrThrow()
@@ -79,7 +82,7 @@ class IOUFlowTests {
     @Test
     fun `recorded transaction has no inputs and a single output, the input IOU`() {
         val iouValue = 1
-        val flow = ExampleFlow.Initiator(iouValue, b.info.singleIdentity())
+        val flow = CreateIOUFlow.Initiator(iouValue, b.info.singleIdentity())
         val future = a.startFlow(flow)
         network.runNetwork()
         val signedTx = future.getOrThrow()
@@ -100,7 +103,7 @@ class IOUFlowTests {
     @Test
     fun `flow records the correct IOU in both parties' vaults`() {
         val iouValue = 1
-        val flow = ExampleFlow.Initiator(1, b.info.singleIdentity())
+        val flow = CreateIOUFlow.Initiator(1, b.info.singleIdentity())
         val future = a.startFlow(flow)
         network.runNetwork()
         future.getOrThrow()
@@ -116,5 +119,44 @@ class IOUFlowTests {
                 assertEquals(recordedState.borrower, b.info.singleIdentity())
             }
         }
+    }
+
+    @Test
+    fun `deve realizar o pagamento`() {
+
+        val iouValue = 10
+        val valorPagamento = 5
+        val outputState = createIOU(iouValue)
+
+        val flow = PayIOUFlow.Initiator(valorPagamento, outputState.linearId.id)
+
+        val future = b.startFlow(flow)
+        network.runNetwork()
+
+        future.getOrThrow()
+
+
+        // We check the recorded IOU in both vaults.
+        for (node in listOf(a, b)) {
+            node.transaction {
+                val ious = node.services.vaultService.queryBy<IOUState>().states
+                assertEquals(1, ious.size)
+                val recordedState = ious.single().state.data
+                assertEquals(recordedState.value, iouValue)
+                assertEquals(recordedState.lender, a.info.singleIdentity())
+                assertEquals(recordedState.borrower, b.info.singleIdentity())
+                assertEquals(recordedState.payedValue, valorPagamento)
+            }
+        }
+    }
+
+    private fun createIOU(iouValue: Int): IOUState {
+        val flow = CreateIOUFlow.Initiator(iouValue, b.info.singleIdentity())
+        val future = a.startFlow(flow)
+
+        network.runNetwork()
+        val tx = future.getOrThrow()
+
+        return tx.coreTransaction.outputsOfType<IOUState>().single()
     }
 }

@@ -3,8 +3,8 @@ package com.example.flow
 import co.paralleluniverse.fibers.Suspendable
 import com.example.contract.IOUContract
 import com.example.contract.IOUContract.Companion.IOU_CONTRACT_ID
-import com.example.flow.ExampleFlow.Acceptor
-import com.example.flow.ExampleFlow.Initiator
+import com.example.flow.CreateIOUFlow.Acceptor
+import com.example.flow.CreateIOUFlow.Initiator
 import com.example.state.IOUState
 import net.corda.core.contracts.Command
 import net.corda.core.contracts.requireThat
@@ -26,7 +26,7 @@ import net.corda.core.utilities.ProgressTracker.Step
  *
  * All methods called within the [FlowLogic] sub-class need to be annotated with the @Suspendable annotation.
  */
-object ExampleFlow {
+object CreateIOUFlow {
     @InitiatingFlow
     @StartableByRPC
     class Initiator(val iouValue: Int,
